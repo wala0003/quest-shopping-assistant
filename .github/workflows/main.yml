@@ -1,0 +1,98 @@
+# This is the name of the workflow that appears in GitHub Actions
+name: CI/CD and Backup
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push events but only for the main branch
+  push:
+    branches: [ main ]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This is our backup job
+  backup:
+    name: Backup Repository
+    runs-on: ubuntu-latest    # This job runs on Linux
+    steps:
+      # First, we check out our repository
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0    # Fetch all history for all branches and tags
+
+      # Create a timestamped backup branch
+      - name: Create Backup Branch
+        run: |
+          # Get current date for branch name
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          # Create and checkout new branch
+          git checkout -b backup/$TIMESTAMP
+          # Push the branch to GitHub
+          git push origin backup/$TIMESTAMP
+
+  # This is our test and build job
+  test-and-build:
+    name: Test and Build
+    runs-on: ubuntu-latest
+    steps:
+      # Check out repository
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      # Setup Node.js environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18'  # Using Node.js 18
+
+      # Install pnpm (our package manager)
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      # Install dependencies
+      - name: Install Dependencies
+        run: pnpm install
+
+      # Run tests
+      - name: Run Tests
+        run: pnpm test
+
+      # Build the extension
+      - name: Build Extension
+        run: pnpm build
+
+      # Save the build as an artifact
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: extension-build
+          path: build/     # This is where Plasmo puts the build files
+
+  # This job creates a release when we push a tag
+  create-release:
+    name: Create Release
+    needs: test-and-build  # Only run this job if test-and-build succeeds
+    if: startsWith(github.ref, 'refs/tags/')  # Only run on tag pushes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+# Helpful GitHub Actions concepts:
+# - Workflow: This entire file is a workflow
+# - Job: A workflow contains jobs (backup, test-and-build, create-release)
+# - Step: Each job contains steps
+# - Action: Pre-made actions we can use (like actions/checkout@v2)
+# - Runner: The machine that runs the job (ubuntu-latest in our case)
+# - Event: What triggers the workflow (push to main in our case)
