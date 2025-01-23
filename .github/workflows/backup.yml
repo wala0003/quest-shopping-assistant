@@ -1,0 +1,163 @@
+# Enhanced backup workflow that runs automatically on GitHub's servers
+name: Enhanced Backup
+
+on:
+  # Runs every hour during work hours (UTC times)
+  # This runs on GitHub's servers, not your local machine
+  schedule:
+    - cron: '0 13-21 * * 1-5'  # 9 AM-5 PM EST (13:00-21:00 UTC), Monday-Friday
+  
+  # Runs automatically whenever code is pushed
+  # Works with any git client (VSCode, command line, GitHub website)
+  push:
+    branches:
+      - '**'  # All branches
+  
+  # Can be manually triggered from GitHub's Actions tab
+  # Useful for on-demand backups
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Create Detailed Backup
+    runs-on: ubuntu-latest    # Runs on GitHub's servers
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Get full history
+
+      # Create detailed git log
+      - name: Generate Change Log
+        run: |
+          mkdir -p .backup
+          git log --pretty=format:"%h - %an, %ar : %s" > .backup/changelog.txt
+          git diff HEAD~1 > .backup/latest-changes.patch || true
+
+      # Create different backup branches based on retention period
+      - name: Create Backup Branches
+        run: |
+          # Daily backup (keep for 7 days)
+          DAILY_BRANCH="backup/daily/$(date +%Y%m%d)"
+          git checkout -b $DAILY_BRANCH
+          git push origin $DAILY_BRANCH
+
+          # Weekly backup (keep for 4 weeks)
+          if [ "$(date +%u)" = "1" ]; then  # Monday
+            WEEKLY_BRANCH="backup/weekly/$(date +%Y%m%d)"
+            git checkout -b $WEEKLY_BRANCH
+            git push origin $WEEKLY_BRANCH
+          fi
+
+          # Monthly backup (keep for 12 months)
+          if [ "$(date +%d)" = "01" ]; then  # First day of month
+            MONTHLY_BRANCH="backup/monthly/$(date +%Y%m)"
+            git checkout -b $MONTHLY_BRANCH
+            git push origin $MONTHLY_BRANCH
+          fi
+
+      # Clean up old backup branches
+      - name: Cleanup Old Backups
+        run: |
+          # Remove daily backups older than 7 days
+          for branch in $(git branch -r | grep 'origin/backup/daily/' | sed 's/origin\///'); do
+            DATE=$(echo $branch | grep -o '[0-9]\{8\}')
+            if [ $(( ($(date +%s) - $(date -d "$DATE" +%s)) / 86400 )) -gt 7 ]; then
+              git push origin --delete $branch || true
+            fi
+          done
+
+          # Remove weekly backups older than 4 weeks
+          for branch in $(git branch -r | grep 'origin/backup/weekly/' | sed 's/origin\///'); do
+            DATE=$(echo $branch | grep -o '[0-9]\{8\}')
+            if [ $(( ($(date +%s) - $(date -d "$DATE" +%s)) / 86400 )) -gt 28 ]; then
+              git push origin --delete $branch || true
+            fi
+          done
+
+          # Remove monthly backups older than 12 months
+          for branch in $(git branch -r | grep 'origin/backup/monthly/' | sed 's/origin\///'); do
+            DATE=$(echo $branch | grep -o '[0-9]\{6\}')
+            if [ $(( ($(date +%s) - $(date -d "${DATE}01" +%s)) / 86400 )) -gt 365 ]; then
+              git push origin --delete $branch || true
+            fi
+          done
+
+      # Create a backup summary
+      - name: Create Backup Summary
+        run: |
+          echo "Backup Summary ($(date))" > backup-summary.txt
+          echo "------------------------" >> backup-summary.txt
+          echo "Total commits: $(git rev-list --count HEAD)" >> backup-summary.txt
+          echo "Recent changes:" >> backup-summary.txt
+          git log -5 --pretty=format:"%h - %an, %ar : %s" >> backup-summary.txt
+          
+      # Upload backup summary as artifact
+      - name: Upload Backup Summary
+        uses: actions/upload-artifact@v2
+        with:
+          name: backup-summary
+          path: backup-summary.txt
+          retention-days: 30
+
+  # Monitor file changes
+  monitor:
+    name: Monitor File Changes
+    runs-on: ubuntu-latest    # Runs on GitHub's servers
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 2  # Get current and previous commit
+
+      # Check for large file changes or truncations
+      - name: Check File Changes
+        run: |
+          git diff --numstat HEAD~1 HEAD | while read add del file; do
+            if [ "$del" -gt 100 ]; then
+              echo "Warning: Large deletion in $file ($del lines removed)" >> changes.log
+            fi
+          done
+          
+      # Alert if suspicious changes detected
+      - name: Alert on Suspicious Changes
+        if: hashFiles('changes.log') != ''
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            const changes = fs.readFileSync('changes.log', 'utf8');
+            await github.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Suspicious File Changes Detected',
+              body: changes
+            });
+
+# How this workflow protects your code:
+# 1. Automatic Backups:
+#    - Hourly backups during work hours (runs on GitHub's servers)
+#    - Backups on every code push (from any git client)
+#    - Manual backup option from GitHub website
+#
+# 2. Multiple Backup Types:
+#    - Daily backups: Last 7 days of work
+#    - Weekly backups: Last 4 weeks of work
+#    - Monthly backups: Last 12 months of work
+#
+# 3. File Protection:
+#    - Monitors for large file deletions
+#    - Creates GitHub issues for suspicious changes
+#    - Keeps detailed change logs
+#
+# 4. Easy Recovery:
+#    To restore from a backup:
+#    1. Go to GitHub repository > branches
+#    2. Find backup branch (e.g., backup/daily/20250123)
+#    3. git fetch origin
+#    4. git checkout backup/daily/YYYYMMDD
+#    5. git checkout -b restore-branch
+#
+# Note: All of this runs on GitHub's servers automatically
+# You don't need to have VSCode or your computer running
