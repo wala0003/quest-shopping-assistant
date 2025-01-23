@@ -1,33 +1,82 @@
-This is a [Plasmo extension](https://docs.plasmo.com/) project bootstrapped with [`plasmo init`](https://www.npmjs.com/package/plasmo).
+# Quest Shopping Assistant
 
-## Getting Started
+AI-powered Chrome extension that helps find the best deals and automatically applies coupons while shopping online.
 
-First, run the development server:
+## Features
+
+- 🔐 Secure authentication with Supabase
+- 🎨 Modern UI with Tailwind CSS and shadcn/ui
+- 🚀 Built with Plasmo Framework
+- 🔄 Automatic coupon application
+- 💾 Persistent storage with Chrome Storage API
+
+## Tech Stack
+
+- [Plasmo](https://docs.plasmo.com/) - The Browser Extension Framework
+- [React](https://reactjs.org/) - UI Library
+- [TypeScript](https://www.typescriptlang.org/) - Language
+- [Tailwind CSS](https://tailwindcss.com/) - Styling
+- [Supabase](https://supabase.io/) - Backend & Authentication
+- [shadcn/ui](https://ui.shadcn.com/) - UI Components
+
+## Development
 
 ```bash
+# Install dependencies
+pnpm install
+
+# Start development server
 pnpm dev
-# or
-npm run dev
+
+# Build for production
+pnpm build
 ```
 
-Open your browser and load the appropriate development build. For example, if you are developing for the chrome browser, using manifest v3, use: `build/chrome-mv3-dev`.
+### Loading the extension
 
-You can start editing the popup by modifying `popup.tsx`. It should auto-update as you make changes. To add an options page, simply add a `options.tsx` file to the root of the project, with a react component default exported. Likewise to add a content page, add a `content.ts` file to the root of the project, importing some module and do some logic, then reload the extension on your browser.
+1. Open Chrome and navigate to `chrome://extensions`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select the `build/chrome-mv3-dev` directory
 
-For further guidance, [visit our Documentation](https://docs.plasmo.com/)
+## Project Structure
 
-## Making production build
+```
+src/
+├── popup.tsx           # Main extension popup
+├── background/         # Background scripts
+├── components/        # React components
+├── core/             # Core functionality
+└── lib/              # Utility functions
+```
 
-Run the following:
+## Environment Variables
+
+Create a `.env.development` file with:
+
+```env
+PLASMO_PUBLIC_SUPABASE_URL="your-supabase-url"
+PLASMO_PUBLIC_SUPABASE_KEY="your-supabase-anon-key"
+```
+
+## Testing
 
 ```bash
-pnpm build
-# or
-npm run build
+# Run tests
+pnpm test
+
+# Watch mode
+pnpm test:watch
 ```
 
-This should create a production bundle for your extension, ready to be zipped and published to the stores.
+## Contributing
 
-## Submit to the webstores
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-The easiest way to deploy your Plasmo extension is to use the built-in [bpp](https://bpp.browser.market) GitHub action. Prior to using this action however, make sure to build your extension and upload the first version to the store to establish the basic credentials. Then, simply follow [this setup instruction](https://docs.plasmo.com/framework/workflows/submit) and you should be on your way for automated submission!
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
